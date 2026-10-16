@@ -5,13 +5,19 @@ from pydantic import BaseModel
 from database import get_connection
 from ai_service import analyze_lead
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
 
 app = FastAPI(title="AI Lead Manager")
 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[FRONTEND_URL, "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
