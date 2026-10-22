@@ -5,6 +5,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from dotenv import load_dotenv
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
@@ -37,6 +38,9 @@ TEST_DATABASE_URL = _resolve_test_database_url()
 # the test database, never the development one.
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
+# Tests must never reach Gemini with a real key.
+os.environ["GEMINI_API_KEY"] = "test-key-not-real"
+
 
 def _alembic_config():
     config = Config(str(BACKEND_DIR / "alembic.ini"))
@@ -57,3 +61,21 @@ def db_engine():
     yield engine
 
     engine.dispose()
+
+
+@pytest.fixture
+def clean_db(db_engine):
+    with db_engine.begin() as connection:
+        connection.execute(text("TRUNCATE leads RESTART IDENTITY"))
+
+    return db_engine
+
+
+@pytest.fixture
+def client(clean_db):
+    from main import app
+
+    # Return 500 responses instead of re-raising, so tests see what the
+    # frontend sees.
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        yield test_client
