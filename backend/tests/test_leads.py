@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy import text
 
 # Where the endpoint looks up analyze_lead. Changes when the code moves.
-ANALYZE_LEAD_TARGET = "main.analyze_lead"
+ANALYZE_LEAD_TARGET = "services.lead_service.analyze_lead"
 
 VALID_LEAD = {
     "name": "Ada Lovelace",
