@@ -1,13 +1,17 @@
-import os
 import re
-from dotenv import load_dotenv
 from google import genai
 
-load_dotenv()
+from core.config import get_gemini_api_key, get_gemini_model
 
-api_key = os.getenv("GEMINI_API_KEY")
+_client = None
 
-client = genai.Client(api_key=api_key)
+
+def _get_client():
+    # Created on first use so importing this module needs no API key.
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=get_gemini_api_key())
+    return _client
 
 
 def analyze_lead(lead):
@@ -46,8 +50,8 @@ Follow-up guidelines:
 Do not include any extra sections.
 """
 
-    response = client.models.generate_content(
-        model="gemini-3.5-flash-lite",
+    response = _get_client().models.generate_content(
+        model=get_gemini_model(),
         contents=prompt
     )
 
@@ -83,8 +87,6 @@ Do not include any extra sections.
 
     reason = reason_match.group(1).strip()
     ai_response = response_match.group(1).strip()
-    follow_up_days = int(follow_up_match.group(1))
-
     follow_up_days = int(follow_up_match.group(1))
 
     return {
