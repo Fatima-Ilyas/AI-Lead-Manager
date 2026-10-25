@@ -26,6 +26,13 @@ def _env(name):
     return value or None
 
 
+def get_database_url():
+    url = _env("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL is not set")
+    return url
+
+
 def get_gemini_api_key():
     return _env("GEMINI_API_KEY")
 
