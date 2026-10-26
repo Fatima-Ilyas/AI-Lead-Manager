@@ -1,149 +1,96 @@
 from datetime import datetime, timedelta
 
-from database import get_connection
+from sqlalchemy import select, update
+
+from db.models import Lead
+from db.session import new_session
 from ai_service import analyze_lead
 
 
 def create_lead(lead):
-    connection = get_connection()
-    cursor = connection.cursor()
+    # Step 1: Save the lead. The session is closed (and its connection returned
+    # to the pool) before the slow Gemini call.
+    with new_session() as db:
+        new_lead = Lead(
+            name=lead["name"],
+            email=lead["email"],
+            company=lead["company"],
+            requirement=lead["requirement"],
+            budget=lead["budget"],
+            timeline=lead["timeline"]
+        )
+        db.add(new_lead)
+        db.commit()
+        lead_id = new_lead.id
 
-    try:
-        # Step 1: Save the lead
-        query = """
-        INSERT INTO leads
-        (name, email, company, requirement, budget, timeline)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        RETURNING id;
-        """
+    # Step 2: Send the lead to Gemini
+    lead_data = {
+        "name": lead["name"],
+        "email": lead["email"],
+        "company": lead["company"],
+        "requirement": lead["requirement"],
+        "budget": lead["budget"],
+        "timeline": lead["timeline"]
+    }
 
-        cursor.execute(
-            query,
-            (
-                lead["name"],
-                lead["email"],
-                lead["company"],
-                lead["requirement"],
-                lead["budget"],
-                lead["timeline"]
+    ai_result = analyze_lead(lead_data)
+
+    # Step 3: Save Gemini's analysis and follow-up date
+    follow_up_date = datetime.now() + timedelta(
+        days=ai_result["follow_up_days"]
+    )
+
+    with new_session() as db:
+        db.execute(
+            update(Lead)
+            .where(Lead.id == lead_id)
+            .values(
+                lead_score=ai_result["score"],
+                score_reason=ai_result["reason"],
+                ai_response=ai_result["response"],
+                follow_up_date=follow_up_date,
+                ai_follow_up_days=ai_result["follow_up_days"]
             )
         )
+        db.commit()
 
-        lead_id = cursor.fetchone()[0]
-
-        connection.commit()
-
-        # Step 2: Send the lead to Gemini
-        lead_data = {
-            "name": lead["name"],
-            "email": lead["email"],
-            "company": lead["company"],
-            "requirement": lead["requirement"],
-            "budget": lead["budget"],
-            "timeline": lead["timeline"]
-        }
-
-        ai_result = analyze_lead(lead_data)
-
-        # Step 3: Save Gemini's analysis and follow-up date
-        follow_up_date = datetime.now() + timedelta(
-            days=ai_result["follow_up_days"]
-        )
-
-        update_query = """
-        UPDATE leads
-        SET
-            lead_score = %s,
-            score_reason = %s,
-            ai_response = %s,
-            follow_up_date = %s,
-            ai_follow_up_days = %s
-        WHERE id = %s;
-        """
-
-        cursor.execute(
-            update_query,
-            (
-                ai_result["score"],
-                ai_result["reason"],
-                ai_result["response"],
-                follow_up_date,
-                ai_result["follow_up_days"],
-                lead_id
-            )
-        )
-
-        connection.commit()
-
-        # Step 4: Return the complete result
-        return {
-            "message": "Lead created and analyzed successfully",
-            "lead_id": lead_id,
-            "lead_score": ai_result["score"],
-            "score_reason": ai_result["reason"],
-            "ai_response": ai_result["response"]
-        }
-
-    finally:
-        cursor.close()
-        connection.close()
+    # Step 4: Return the complete result
+    return {
+        "message": "Lead created and analyzed successfully",
+        "lead_id": lead_id,
+        "lead_score": ai_result["score"],
+        "score_reason": ai_result["reason"],
+        "ai_response": ai_result["response"]
+    }
 
 
-def list_leads():
-    connection = get_connection()
-    cursor = connection.cursor()
+def list_leads(db):
+    rows = db.scalars(select(Lead).order_by(Lead.created_at.desc())).all()
 
-    try:
-        cursor.execute("""
-            SELECT
-                id,
-                name,
-                email,
-                company,
-                requirement,
-                budget,
-                timeline,
-                lead_score,
-                score_reason,
-                ai_response,
-                status,
-                created_at,
-                follow_up_date,
-                ai_follow_up_days
-            FROM leads
-            ORDER BY created_at DESC
-        """)
+    leads = []
 
-        rows = cursor.fetchall()
+    for row in rows:
+        leads.append({
+            "id": row.id,
+            "name": row.name,
+            "email": row.email,
+            "company": row.company,
+            "requirement": row.requirement,
+            "budget": row.budget,
+            "timeline": row.timeline,
+            "lead_score": row.lead_score,
+            "score_reason": row.score_reason,
+            "ai_response": row.ai_response,
+            "status": row.status,
+            "created_at": row.created_at,
+            "follow_up_date": row.follow_up_date,
+            "ai_follow_up_days": row.ai_follow_up_days
+        })
 
-        leads = []
-
-        for row in rows:
-            leads.append({
-                "id": row[0],
-                "name": row[1],
-                "email": row[2],
-                "company": row[3],
-                "requirement": row[4],
-                "budget": row[5],
-                "timeline": row[6],
-                "lead_score": row[7],
-                "score_reason": row[8],
-                "ai_response": row[9],
-                "status": row[10],
-                "created_at": row[11],
-                "follow_up_date": row[12],
-                "ai_follow_up_days": row[13]
-            })
-
-        return leads
-
-    finally:
-        cursor.close()
-        connection.close()
+    return leads
 
 
-def update_status(lead_id, status):
+def update_status(db, lead_id, status):
     allowed_statuses = [
         "new",
         "contacted",
@@ -157,70 +104,44 @@ def update_status(lead_id, status):
             "allowed_statuses": allowed_statuses
         }
 
-    connection = get_connection()
-    cursor = connection.cursor()
+    result = db.execute(
+        update(Lead)
+        .where(Lead.id == lead_id)
+        .values(status=status)
+        .returning(Lead.id, Lead.status)
+    ).one_or_none()
 
-    try:
-        cursor.execute(
-            """
-            UPDATE leads
-            SET status = %s
-            WHERE id = %s
-            RETURNING id, status;
-            """,
-            (status, lead_id)
-        )
-
-        result = cursor.fetchone()
-
-        if result is None:
-            return {
-                "error": "Lead not found"
-            }
-
-        connection.commit()
-
+    if result is None:
         return {
-            "message": "Lead status updated successfully",
-            "lead_id": result[0],
-            "status": result[1]
+            "error": "Lead not found"
         }
 
-    finally:
-        cursor.close()
-        connection.close()
+    db.commit()
+
+    return {
+        "message": "Lead status updated successfully",
+        "lead_id": result[0],
+        "status": result[1]
+    }
 
 
-def update_follow_up(lead_id, follow_up_date):
-    connection = get_connection()
-    cursor = connection.cursor()
+def update_follow_up(db, lead_id, follow_up_date):
+    result = db.execute(
+        update(Lead)
+        .where(Lead.id == lead_id)
+        .values(follow_up_date=follow_up_date)
+        .returning(Lead.id, Lead.follow_up_date)
+    ).one_or_none()
 
-    try:
-        cursor.execute(
-            """
-            UPDATE leads
-            SET follow_up_date = %s
-            WHERE id = %s
-            RETURNING id, follow_up_date;
-            """,
-            (follow_up_date, lead_id)
-        )
-
-        result = cursor.fetchone()
-
-        if result is None:
-            return {
-                "error": "Lead not found"
-            }
-
-        connection.commit()
-
+    if result is None:
         return {
-            "message": "Follow-up date updated successfully",
-            "lead_id": result[0],
-            "follow_up_date": result[1]
+            "error": "Lead not found"
         }
 
-    finally:
-        cursor.close()
-        connection.close()
+    db.commit()
+
+    return {
+        "message": "Follow-up date updated successfully",
+        "lead_id": result[0],
+        "follow_up_date": result[1]
+    }

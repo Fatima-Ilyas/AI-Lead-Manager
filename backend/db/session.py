@@ -21,9 +21,14 @@ def get_engine():
     )
 
 
+def new_session():
+    """A session bound to the shared engine. Use as a context manager to close it."""
+    return SessionLocal(bind=get_engine())
+
+
 def get_db():
     """FastAPI dependency: one session per request, returned to the pool after."""
-    session = SessionLocal(bind=get_engine())
+    session = new_session()
     try:
         yield session
     finally:
