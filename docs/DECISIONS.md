@@ -20,6 +20,16 @@ Update this file whenever a choice is made. Write "undecided" where it is. Claud
 5. WhatsApp: webhook, contacts, conversations, messages (test number first, then BSP)
 6. Pilot with 3 to 5 real businesses before building billing
 
+## Phase 1 status
+Phase 1 (foundation) ended early after step 7 (commit cf7979c). Done: routers/services split, SQLAlchemy 2.0 with a connection pool, Alembic baseline migration, env-based config, pytest with a separate test database.
+
+## Deferred until needed (Phase 1 steps 8-12)
+- Step 8: Pydantic request/response schemas
+- Step 9: /api/v1 prefix (until then the frontend calls the bare /leads paths)
+- Step 10: Dockerfile
+- Step 11: GitHub Actions workflow that runs the tests
+- Step 12: README and status doc updates
+
 ## Open decisions
 - Job queue: undecided (Postgres-backed vs Redis)
 - Payments provider: undecided (check availability for a Pakistan-registered business)
