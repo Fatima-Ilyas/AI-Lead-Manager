@@ -2,12 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { createSampleLeads, previewAnalysis } from "../data/sampleLeads";
+import { api, isAuthFailure } from "../lib/api";
+import { getToken } from "../lib/auth";
 
 const STORAGE_KEY = "lead-manager-preview-v1";
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
-  timeout: 15000,
-});
 
 function storedPreview() {
   try {
@@ -38,6 +36,9 @@ export function useLeads() {
   const modeRef = useRef("loading");
 
   const refresh = useCallback(async (signal) => {
+    // Not signed in: the login screen handles it. Do not call the API, and do
+    // not fall back to sample data.
+    if (!getToken()) return false;
     setRefreshing(true);
     setError("");
     try {
@@ -58,6 +59,19 @@ export function useLeads() {
       return true;
     } catch (failure) {
       if (axios.isCancel(failure)) return false;
+      if (isAuthFailure(failure)) {
+        // Never sample data here: that would look like a working workspace.
+        setError(
+          failure.response.status === 401
+            ? "Your session has expired. Sign in again."
+            : "Sign-in isn’t set up on the server yet.",
+        );
+        if (modeRef.current !== "live") {
+          modeRef.current = "unavailable";
+          setMode("unavailable");
+        }
+        return false;
+      }
       if (modeRef.current === "live") {
         setError(
           "We couldn’t refresh your leads. Your last loaded information is still available.",
@@ -93,11 +107,16 @@ export function useLeads() {
     setPending((previous) => new Set(previous).add(key));
     try {
       return await action();
-    } catch {
-      toast.error("Your change couldn’t be saved.", {
-        description:
-          "Check your connection and refresh your leads before trying again.",
-      });
+    } catch (failure) {
+      if (failure?.response?.status === 401)
+        toast.error("Your session has expired.", {
+          description: "Sign in again, then repeat your change.",
+        });
+      else
+        toast.error("Your change couldn’t be saved.", {
+          description:
+            "Check your connection and refresh your leads before trying again.",
+        });
       return false;
     } finally {
       setPending((previous) => {
