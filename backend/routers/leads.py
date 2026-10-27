@@ -2,10 +2,12 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from core.deps import require_admin
 from db.session import get_db
 from services import lead_service
 
-router = APIRouter()
+# Router-level, so every lead endpoint is protected, including ones added later.
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 class Lead(BaseModel):

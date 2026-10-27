@@ -41,6 +41,16 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 # Tests must never reach Gemini with a real key.
 os.environ["GEMINI_API_KEY"] = "test-key-not-real"
 
+# Fixed test credentials, never the real ones. The hash is made once here so
+# only the login tests pay for scrypt.
+from core.security import create_access_token, hash_password  # noqa: E402
+
+TEST_ADMIN_PASSWORD = "test-admin-password"
+TEST_AUTH_SECRET = "test-auth-secret-" + "x" * 32
+os.environ["ADMIN_PASSWORD_HASH"] = hash_password(TEST_ADMIN_PASSWORD)
+os.environ["AUTH_SECRET"] = TEST_AUTH_SECRET
+os.environ.pop("AUTH_TOKEN_TTL_MINUTES", None)
+
 
 def _alembic_config():
     config = Config(str(BACKEND_DIR / "alembic.ini"))
@@ -72,10 +82,35 @@ def clean_db(db_engine):
 
 
 @pytest.fixture
+def admin_password():
+    return TEST_ADMIN_PASSWORD
+
+
+@pytest.fixture
+def auth_secret():
+    return TEST_AUTH_SECRET
+
+
+@pytest.fixture
 def client(clean_db):
+    """A client signed in as the admin, so the lead tests need no login."""
     from main import app
 
+    token = create_access_token(TEST_AUTH_SECRET, ttl_minutes=60)
     # Return 500 responses instead of re-raising, so tests see what the
     # frontend sees.
+    with TestClient(
+        app,
+        raise_server_exceptions=False,
+        headers={"Authorization": f"Bearer {token}"},
+    ) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def anonymous_client(clean_db):
+    """A client with no credentials."""
+    from main import app
+
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
