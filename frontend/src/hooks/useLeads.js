@@ -1,31 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { createSampleLeads, previewAnalysis } from "../data/sampleLeads";
-import { api, isAuthFailure } from "../lib/api";
+import { previewAnalysis } from "../data/sampleLeads";
+import { api } from "../lib/api";
 import { getToken } from "../lib/auth";
+import { loadFailureOutcome } from "../lib/loadFailure";
 
 const STORAGE_KEY = "lead-manager-preview-v1";
-
-function storedPreview() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (
-      Array.isArray(parsed) &&
-      parsed.every(
-        (lead) =>
-          lead &&
-          typeof lead.id === "string" &&
-          typeof lead.name === "string" &&
-          typeof lead.email === "string",
-      )
-    )
-      return parsed;
-  } catch {
-    /* Browser storage may be unavailable. Preview still works in memory. */
-  }
-  return createSampleLeads();
-}
 
 export function useLeads() {
   const [leads, setLeads] = useState([]);
@@ -36,8 +17,7 @@ export function useLeads() {
   const modeRef = useRef("loading");
 
   const refresh = useCallback(async (signal) => {
-    // Not signed in: the login screen handles it. Do not call the API, and do
-    // not fall back to sample data.
+    // Not signed in: the login screen handles it. Do not call the API.
     if (!getToken()) return false;
     setRefreshing(true);
     setError("");
@@ -58,28 +38,17 @@ export function useLeads() {
       setMode("live");
       return true;
     } catch (failure) {
-      if (axios.isCancel(failure)) return false;
-      if (isAuthFailure(failure)) {
-        // Never sample data here: that would look like a working workspace.
-        setError(
-          failure.response.status === 401
-            ? "Your session has expired. Sign in again."
-            : "Sign-in isn’t set up on the server yet.",
-        );
-        if (modeRef.current !== "live") {
-          modeRef.current = "unavailable";
-          setMode("unavailable");
-        }
-        return false;
-      }
-      if (modeRef.current === "live") {
-        setError(
-          "We couldn’t refresh your leads. Your last loaded information is still available.",
-        );
-      } else {
-        setLeads(storedPreview());
-        modeRef.current = "sample";
-        setMode("sample");
+      // Never sample data here: that would look like a working workspace.
+      const outcome = loadFailureOutcome({
+        failure,
+        wasLive: modeRef.current === "live",
+        cancelled: axios.isCancel(failure),
+      });
+      if (!outcome) return false;
+      setError(outcome.error);
+      if (outcome.mode !== modeRef.current) {
+        modeRef.current = outcome.mode;
+        setMode(outcome.mode);
       }
       return false;
     } finally {

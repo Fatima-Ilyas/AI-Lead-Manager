@@ -197,7 +197,7 @@ export function AppShell({
               {mode === "sample"
                 ? "The backend is not connected. You are viewing sample leads, and preview changes are saved only in this browser."
                 : mode === "unavailable"
-                  ? "The backend is reachable but is not accepting sign-in yet, so no leads are shown. See the message on the page."
+                  ? "Your leads could not be loaded, so none are shown. See the message on the page, then try again."
                   : "Lead data is loaded from your configured backend. Contact details and AI recommendations are available in each lead’s record."}
             </HelpTip>
             <span className="topbar-divider" />

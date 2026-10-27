@@ -23,7 +23,9 @@ Development requests use `/api`, proxied to `http://127.0.0.1:8000`. To use anot
 
 The existing backend requires `DATABASE_URL` and `GEMINI_API_KEY`. These are server secrets and must never use a `VITE_` prefix or be included in frontend code.
 
-If the backend cannot be reached during initial loading, a clearly labeled sample workspace appears. Its records are fictional, use reserved `.example` email domains, and are kept in this browser's local storage. New preview leads receive an explicitly illustrative estimate and reply. They are never sent to the API. Use **Connect live data** to retry the configured backend; successful connection switches to the real records. Empty live databases remain empty rather than being filled with samples. Browser reloads retain preview changes and incomplete lead-entry drafts.
+The workspace opens on a sign-in page and needs the admin password (see the backend's `ADMIN_PASSWORD_HASH`). If the first load of the leads fails for any reason (timeout, network error, server error or an unexpected response), a signed-in user sees a "Not connected" state with a **Try again** button. Sample data is never shown in its place. A 401 clears the stored token and returns to the sign-in page. Once the leads have loaded, a failed refresh keeps them on screen with an error message. Empty live databases remain empty. Incomplete lead-entry drafts are kept in the browser tab until you sign out.
+
+The sample workspace (`src/data/sampleLeads.js` and the `sample` mode in `src/hooks/useLeads.js`) is still in the code, but nothing switches to it now.
 
 ## Reusable architecture
 
