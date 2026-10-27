@@ -42,7 +42,7 @@ export function useLeads() {
     setRefreshing(true);
     setError("");
     try {
-      const { data } = await api.get("/leads", { signal, timeout: 4000 });
+      const { data } = await api.get("/leads", { signal, timeout: 10000 });
       if (!Array.isArray(data)) throw new Error("Unexpected response");
       setLeads(
         data.map((lead) => ({

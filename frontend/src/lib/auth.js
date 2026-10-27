@@ -66,6 +66,23 @@ export function clearToken() {
   if (hadToken) notify();
 }
 
+// Storage keys that hold lead details typed by the signed-in user.
+const SESSION_DATA_KEYS = ["lead-manager-draft-v1"];
+
+// What the "Sign out" button calls. Drops the token and the unsaved lead-form
+// draft. The in-memory lead list goes when the gate in App.jsx unmounts the
+// workspace, which it does because the token is gone.
+export function signOut() {
+  for (const key of SESSION_DATA_KEYS) {
+    try {
+      sessionStorage.removeItem(key);
+    } catch {
+      /* Nothing stored to remove. */
+    }
+  }
+  clearToken();
+}
+
 // For useSyncExternalStore(subscribe, getToken). Returns the unsubscribe function.
 export function subscribe(listener) {
   listeners.add(listener);

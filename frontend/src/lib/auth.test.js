@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -5,6 +6,7 @@ import {
   getToken,
   isExpired,
   setToken,
+  signOut,
   subscribe,
   tokenExpiry,
 } from "./auth.js";
@@ -121,6 +123,52 @@ test("the session works in memory when browser storage throws", () => {
   assert.equal(getToken(), live);
   clearToken();
   assert.equal(getToken(), null);
+});
+
+test("signOut drops the token and the saved lead-form draft, and tells listeners", () => {
+  setToken(makeToken({ sub: "admin", exp: Date.now() / 1000 + 3600 }));
+  globalThis.sessionStorage.setItem("lead-manager-draft-v1", '{"name":"Ada"}');
+  globalThis.sessionStorage.setItem("unrelated-key", "kept");
+  let calls = 0;
+  const unsubscribe = subscribe(() => calls++);
+
+  signOut();
+  unsubscribe();
+
+  assert.equal(getToken(), null);
+  assert.equal(
+    globalThis.sessionStorage.getItem("lead-manager-draft-v1"),
+    null,
+  );
+  assert.equal(globalThis.sessionStorage.getItem("unrelated-key"), "kept");
+  assert.equal(calls, 1);
+});
+
+test("signOut still signs out when browser storage throws", () => {
+  setToken(makeToken({ sub: "admin", exp: Date.now() / 1000 + 3600 }));
+  const broken = () => {
+    throw new Error("storage disabled");
+  };
+  globalThis.sessionStorage = {
+    getItem: broken,
+    setItem: broken,
+    removeItem: broken,
+  };
+
+  signOut();
+
+  assert.equal(getToken(), null);
+});
+
+// There is no DOM test tooling in this project, so the part of sign-out that
+// empties the in-memory lead list cannot be run here. It rests on one line in
+// App.jsx: the workspace is keyed by the token, so React unmounts it (and every
+// lead its hook holds) as soon as the token goes. This guards that line.
+test("App.jsx mounts the workspace keyed by the token, so sign-out unmounts it", () => {
+  const source = readFileSync(new URL("../App.jsx", import.meta.url), "utf8");
+
+  assert.match(source, /<Workspace key=\{token\} \/>/);
+  assert.match(source, /useSyncExternalStore\(subscribe, getToken\)/);
 });
 
 test("the session works when sessionStorage does not exist at all", () => {

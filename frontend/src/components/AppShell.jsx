@@ -4,6 +4,7 @@ import {
   CircleHelp,
   Building2,
   LayoutDashboard,
+  LogOut,
   PanelsTopLeft,
   Plus,
   UsersRound,
@@ -21,7 +22,14 @@ const navigation = [
   { id: "insights", label: "Insights", icon: ChartNoAxesCombined },
 ];
 
-export function AppShell({ route, navigate, stats, mode, children }) {
+export function AppShell({
+  route,
+  navigate,
+  stats,
+  mode,
+  onSignOut,
+  children,
+}) {
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem("lead-manager-sidebar-collapsed") === "true";
@@ -124,7 +132,9 @@ export function AppShell({ route, navigate, stats, mode, children }) {
                   ? "Sample environment"
                   : mode === "live"
                     ? "Connected environment"
-                    : "Connecting…"}
+                    : mode === "unavailable"
+                      ? "Not connected"
+                      : "Connecting…"}
               </span>
             </div>
           </div>
@@ -179,12 +189,16 @@ export function AppShell({ route, navigate, stats, mode, children }) {
                 ? "Sample data"
                 : mode === "live"
                   ? "Live data"
-                  : "Connecting"}
+                  : mode === "unavailable"
+                    ? "Not connected"
+                    : "Connecting"}
             </span>
             <HelpTip label="workspace connection">
               {mode === "sample"
                 ? "The backend is not connected. You are viewing sample leads, and preview changes are saved only in this browser."
-                : "Lead data is loaded from your configured backend. Contact details and AI recommendations are available in each lead’s record."}
+                : mode === "unavailable"
+                  ? "The backend is reachable but is not accepting sign-in yet, so no leads are shown. See the message on the page."
+                  : "Lead data is loaded from your configured backend. Contact details and AI recommendations are available in each lead’s record."}
             </HelpTip>
             <span className="topbar-divider" />
             <Button
@@ -194,6 +208,15 @@ export function AppShell({ route, navigate, stats, mode, children }) {
             >
               <CircleHelp size={19} />
             </Button>
+            <LabelTooltip label="Sign out">
+              <Button
+                variant="icon"
+                aria-label="Sign out"
+                onClick={onSignOut}
+              >
+                <LogOut size={19} />
+              </Button>
+            </LabelTooltip>
           </div>
         </header>
         <main id="main-content" className="main-content" tabIndex={-1}>
@@ -206,7 +229,9 @@ export function AppShell({ route, navigate, stats, mode, children }) {
               ? "Local preview"
               : mode === "live"
                 ? "Connected workspace"
-                : "Connecting to workspace"}
+                : mode === "unavailable"
+                  ? "Workspace not connected"
+                  : "Connecting to workspace"}
           </span>
         </footer>
       </div>

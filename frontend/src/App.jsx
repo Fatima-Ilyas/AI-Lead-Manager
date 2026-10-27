@@ -1,14 +1,23 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Tooltip } from "@base-ui/react/tooltip";
 import { Toaster, toast } from "sonner";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { useLeads } from "./hooks/useLeads";
 import { useRoute } from "./hooks/useRoute";
+import { getToken, signOut, subscribe } from "./lib/auth";
 import { getStats } from "./lib/leads";
 import { AppShell, AddLeadButton, PageHeading } from "./components/AppShell";
 import { Button, EmptyState, Skeleton } from "./components/ui";
 import { LeadsWorkspace } from "./components/LeadTable";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { Login } from "./pages/Login";
 import "./App.css";
 
 const Overview = lazy(() =>
@@ -56,7 +65,25 @@ const headings = {
   },
 };
 
+// Shows the login page until there is a token. The workspace is keyed by the
+// token, so signing out (or the server rejecting the token) unmounts it and
+// drops every lead held in memory; the next sign-in starts from a blank slate.
 export default function App() {
+  const token = useSyncExternalStore(subscribe, getToken);
+  return (
+    <>
+      {token ? <Workspace key={token} /> : <Login />}
+      <Toaster
+        position="bottom-right"
+        richColors
+        closeButton
+        toastOptions={{ className: "workspace-toast" }}
+      />
+    </>
+  );
+}
+
+function Workspace() {
   const data = useLeads();
   const [route, navigate] = useRoute();
   const [search, setSearch] = useState("");
@@ -127,6 +154,7 @@ export default function App() {
         navigate={navigate}
         stats={stats}
         mode={data.mode}
+        onSignOut={signOut}
       >
         {headings[route] && (
           <PageHeading {...headings[route]}>
@@ -215,12 +243,6 @@ export default function App() {
           </Suspense>
         </ErrorBoundary>
       </AppShell>
-      <Toaster
-        position="bottom-right"
-        richColors
-        closeButton
-        toastOptions={{ className: "workspace-toast" }}
-      />
     </Tooltip.Provider>
   );
 }
